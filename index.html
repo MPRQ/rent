@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rent Fee Manager</title>
+  <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-database.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    input {
+      width: 120px;
+      padding: 5px;
+      text-align: center;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .result {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rent Fee Manager</h1>
+
+  <!-- Input for Total Fees -->
+  <div>
+    <label for="waterFee">Total Water Fee ($): </label>
+    <input type="number" id="waterFee" placeholder="Enter total water fee" oninput="updateAndSave()">
+  </div>
+  <div>
+    <label for="gasFee">Total Gas Fee ($): </label>
+    <input type="number" id="gasFee" placeholder="Enter total gas fee" oninput="updateAndSave()">
+  </div>
+  <div>
+    <label for="electricFee">Total Electric Fee ($): </label>
+    <input type="number" id="electricFee" placeholder="Enter total electric fee" oninput="updateAndSave()">
+  </div>
+
+  <br>
+
+  <!-- Table for Splitting Fees -->
+  <table id="feeTable">
+    <thead>
+      <tr>
+        <th>Person</th>
+        <th>Flat Cost ($)</th>
+        <th>Water Fee ($)</th>
+        <th>Gas Fee ($)</th>
+        <th>Electric Fee ($)</th>
+        <th>Total Fee ($)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows will be dynamically populated -->
+    </tbody>
+  </table>
+
+  <button onclick="addRow()">Add Person</button>
+  <div class="result" id="grandTotal"></div>
+
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyD1ywRySJ7ArHZRLBFV4-EfLqywikHIQok",
+      authDomain: "rent-fee.firebaseapp.com",
+      projectId: "rent-fee",
+      storageBucket: "rent-fee.firebasestorage.app",
+      messagingSenderId: "382197202926",
+      appId: "1:382197202926:web:01cdf431e65c7365cb18ff",
+      measurementId: "G-7L6KEP5Q18"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Function to fetch data from Firebase and update the UI
+    function fetchData() {
+      firebase.database().ref('fees').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          document.getElementById('waterFee').value = data.water || 0;
+          document.getElementById('gasFee').value = data.gas || 0;
+          document.getElementById('electricFee').value = data.electric || 0;
+
+          const tableBody = document.querySelector('#feeTable tbody');
+          tableBody.innerHTML = ''; // Clear existing rows
+
+          if (data.people) {
+            Object.entries(data.people).forEach(([name, person]) => {
+              const newRow = document.createElement('tr');
+              newRow.innerHTML = `
+                <td>${name}</td>
+                <td>${person.flatCost.toFixed(2)}</td>
+                <td>${person.water.toFixed(2)}</td>
+                <td>${person.gas.toFixed(2)}</td>
+                <td>${person.electric.toFixed(2)}</td>
+                <td>${person.total.toFixed(2)}</td>
+              `;
+              tableBody.appendChild(newRow);
+            });
+          }
+        }
+      });
+    }
+
+    // Function to save data to Firebase
+    function saveData() {
+      const waterFee = parseFloat(document.getElementById('waterFee').value) || 0;
+      const gasFee = parseFloat(document.getElementById('gasFee').value) || 0;
+      const electricFee = parseFloat(document.getElementById('electricFee').value) || 0;
+
+      const tableBody = document.querySelector('#feeTable tbody');
+      const people = {};
+
+      Array.from(tableBody.rows).forEach(row => {
+        const name = row.cells[0].innerText;
+        const flatCost = parseFloat(row.cells[1].innerText) || 0;
+        const water = parseFloat(row.cells[2].innerText) || 0;
+        const gas = parseFloat(row.cells[3].innerText) || 0;
+        const electric = parseFloat(row.cells[4].innerText) || 0;
+        const total = parseFloat(row.cells[5].innerText) || 0;
+
+        people[name] = { flatCost, water, gas, electric, total };
+      });
+
+      firebase.database().ref('fees').set({
+        water: waterFee,
+        gas: gasFee,
+        electric: electricFee,
+        people: people
+      });
+    }
+
+    // Function to add a new row for a person
+    function addRow() {
+      const name = prompt("Enter the person's name:");
+      if (!name) {
+        alert("Name cannot be empty!");
+        return;
+      }
+
+      const flatCost = parseFloat(prompt("Enter the flat cost for " + name + ":")) || 0;
+
+      const tableBody = document.querySelector('#feeTable tbody');
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td>${name}</td>
+        <td>${flatCost.toFixed(2)}</td>
+        <td>0.00</td>
+        <td>0.00</td>
+        <td>0.00</td>
+        <td>${flatCost.toFixed(2)}</td>
+      `;
+      tableBody.appendChild(newRow);
+      updateAndSave(); // Update totals and save data after adding a new person
+    }
+
+    // Function to update totals dynamically and save data to Firebase
+    function updateAndSave() {
+      const waterFee = parseFloat(document.getElementById('waterFee').value) || 0;
+      const gasFee = parseFloat(document.getElementById('gasFee').value) || 0;
+      const electricFee = parseFloat(document.getElementById('electricFee').value) || 0;
+
+      const tableBody = document.querySelector('#feeTable tbody');
+      Array.from(tableBody.rows).forEach(row => {
+        const flatCost = parseFloat(row.cells[1].innerText) || 0;
+        const water = waterFee / tableBody.rows.length;
+        const gas = gasFee / tableBody.rows.length;
+        const electric = electricFee / tableBody.rows.length;
+        const total = flatCost + water + gas + electric;
+
+        row.cells[2].innerText = water.toFixed(2);
+        row.cells[3].innerText = gas.toFixed(2);
+        row.cells[4].innerText = electric.toFixed(2);
+        row.cells[5].innerText = total.toFixed(2);
+      });
+
+      // Save updated data to Firebase
+      saveData();
+    }
+
+    // Fetch data on page load
+    fetchData();
+  </script>
+</body>
+</html>
